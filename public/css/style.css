@@ -1,0 +1,14 @@
+body {
+  padding-top: 70px; /* navbar */
+}
+
+.ballots {
+  list-style: none;
+  padding-left: 1em;
+}
+
+.ballot {
+  border: 1px solid rgba(0,0,0,0.1);
+  padding: 1em;
+  margin: 1em 0;
+}

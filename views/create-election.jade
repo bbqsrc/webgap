@@ -1,0 +1,70 @@
+extend layout
+block content
+  .page-header
+    h1= title
+
+  form.col-sm-8.col-sm-offset-2(method="POST")
+    h2 Election Details
+    .form-group
+      label.control-label(for='fld1') Election Name
+      input.form-control(placeholder='Best Election', type='text', name='electionName', id='fld1')
+    .form-group
+      label.control-label(for='fld2') Slug 
+      input.form-control(placeholder='best-election', type='text', name='slug', id='fld2')
+
+    h2 Date and Time
+    .row
+      .form-group.col-sm-6
+        label.control-label(for='fld31') Start Date 
+        input.form-control(placeholder='2014-12-31', type='date', name='startDate', id='fld31')
+      .form-group.col-sm-6
+        label.control-label(for='fld32') Start Time 
+        input.form-control(placeholder='23:59', type='time', name='startTime', id='fld32')
+    .row
+      .form-group.col-sm-6
+        label.control-label(for='fld41') End Date
+        input.form-control(placeholder='2015-01-31', type='date', name='endDate', id='fld41')
+      .form-group.col-sm-6
+        label.control-label(for='fld42') End Time
+        input.form-control(placeholder='23:59', type='time', name='endTime', id='fld42')
+    
+    h2 Email
+    .form-group
+      label.control-label(for='fld-email1') From
+      input.form-control(placeholder='Test Person (Organisation) <email@place.lol>', type='text', name='emailFrom', id='fld-email1')
+    .form-group
+      label.control-label(for='fld-email2') Subject
+      input.form-control(placeholder='Voting Token Inside!', type='text', name='emailSubject', id='fld-email2')
+    .form-group
+      label.control-label(for='fld-email3') Body
+      textarea.form-control(name='emailBody', id='fld-email3').
+        Dear person,
+
+        Vote here: {url}
+
+        Signed,
+        Election Team
+      .help-block Body must include the {url} token or people won't be able to access the voting page!
+    .form-group
+      label.control-label(for='fld-email4') Recipients
+      textarea.form-control(placeholder='foo@bar.lol', name='emailRecipients', id='fld-email4').
+      .help-block One email address per line.
+
+    h2 Required files
+    .form-group
+      label.control-label(for='fld-files') Form files (.zip)
+      input.form-control(type='file', name='files', id='fld-files')
+      .help-block
+        | This zip file must contain the following:
+        ul
+          li index.html (actual form)
+          li success.html (page to go to when success occurs)
+          li failure.html (page to go to when failure occurs)
+          li static/ directory with all dependencies
+        | A <base> tag will be injected in order to fix dependency links.
+        | Please reference all deps from a relative "static" directory (no slash at the front).
+    
+    button.btn.btn-success(type='submit') Create Election
+
+    hr
+

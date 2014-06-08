@@ -1,0 +1,36 @@
+extend layout
+block content
+  .page-header
+    h1 Ballots
+
+  strong
+    | Ballots: 
+  span= count
+
+  ul.ballots
+    for ballot in ballots
+      li.ballot
+        strong Elections
+        ul
+          if ballot.ballot.elections
+            each candidates, office in ballot.ballot.elections
+              li
+                strong= office
+              ul
+                each n, candidate in candidates
+                  li
+                    = candidate
+                    | : 
+                    strong= n
+          else
+            li
+              em No elections
+        strong Motions
+        ul
+          if ballot.ballot.motions
+            each choice, motion in ballot.ballot.motions
+              li
+                = motion
+                | : 
+                strong= choice
+
