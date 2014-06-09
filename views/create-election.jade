@@ -7,7 +7,7 @@ block content
     h2 Election Details
     .form-group
       label.control-label(for='fld1') Election Name
-      input.form-control(placeholder='Best Election', type='text', name='electionName', id='fld1')
+      input.form-control(placeholder='Best Election', type='text', name='title', id='fld1')
     .form-group
       label.control-label(for='fld2') Slug 
       input.form-control(placeholder='best-election', type='text', name='slug', id='fld2')
@@ -52,10 +52,10 @@ block content
 
     h2 Required files
     .form-group
-      label.control-label(for='fld-files') Form files (.zip)
-      input.form-control(type='file', name='files', id='fld-files')
+      label.control-label(for='fld-files') Form files (.tar.gz)
+      input.form-control(type='file', name='tgzFile', id='fld-files')
       .help-block
-        | This zip file must contain the following:
+        | This tarball must contain the following:
         ul
           li index.html (actual form)
           li success.html (page to go to when success occurs)

@@ -1,5 +1,6 @@
 var express = require('express'),
     passport = require('passport'),
+    uuid = require('uuid'),
     MongoClient = require('mongodb').MongoClient,
     util = require('../util.js'),
     UserUtil = util.UserUtil,
@@ -34,7 +35,7 @@ router.get('/elections', isAdmin, function(req, res) {
             parsed.push({
                 slug: doc.slug,
                 title: doc.title || doc.slug,
-                tokens: doc.tokens.length,
+                tokens: doc.participants.length,
                 startTime: doc.startTime,
                 endTime: doc.endTime
             });
@@ -47,26 +48,18 @@ router.route("/elections/create")
     res.render('create-election', { title: "Create Election" });
 })
 .post(isAdmin, parseFormData, function(req, res) {
-    res.type('json');
-
-    /*
-    var form = new formidable.IncomingForm();
-
-    form.parse(req, function(err, fields, files) {
-        if (err) throw err;
-
-        res.end(util.inspect({fields: fields, files: files})); 
-    });
-    */
-
-   res.end(JSON.stringify({body: req.body, files: req.files}, null, 2));
+    util.elections.createElection(req, res, req.body, req.files);
 });
 
 
 router.get("/election/:slug", isAdmin, function(req, res) {
     var slug = req.params.slug;
 
-    res.render('election', { title: "TODO: set the title", slug: slug });
+    util.elections.getElection(slug, function(err, election) {
+        if (err) throw err;
+        
+        res.render('election', { election: election });
+    });
 });
 
 router.get("/ballots/:slug", isAdmin, function(req, res) {
@@ -83,7 +76,7 @@ router.get("/ballots/:slug", isAdmin, function(req, res) {
             
             ballots.find({election_id: item._id}).toArray(function(err, data) {
                 if (err) throw err;
-                res.render('ballots', { ballots: data, count: data.length });
+                res.render('ballots', { util: util, ballots: data, count: data.length });
             });
         });
     });
@@ -104,7 +97,7 @@ router.route("/login")
 
 router.get('/logout', function(req, res) {
     req.logout();
-    res.redirect('/login');
+    res.redirect('/admin/login');
 });
 
 router.route('/create-account')
@@ -131,7 +124,7 @@ router.route('/create-account')
                         submit: "Create Account"
                     });
                 } else {
-                    res.redirect('/login');
+                    res.redirect('/admin/login');
                 }
             });
         });
@@ -157,15 +150,18 @@ router.route('/create-account')
                         title: "Create Account",
                         submit: "Create Account"
                     });
+
+                    return;
                 }
 
                 UserUtil.generatePassword(req.body.password, function(password) {
                     users.insert({username: req.body.username,
                                   password: password,
+                                  uuid: uuid.v4(),
                                   admin: true}, function(err) {
                         if (err) throw err;
 
-                        res.redirect('/login');
+                        res.redirect('/admin/create-account');
                     })
                 });
             });
@@ -180,7 +176,7 @@ router.route('/create-account')
                 if (err) throw err;
                 
                 if (item != null) {
-                    res.redirect('/login');
+                    res.redirect('/admin/login');
                 }
 
                 // Check for username existing
@@ -201,7 +197,7 @@ router.route('/create-account')
                                       admin: true}, {w:1}, function(err) {
                             if (err) throw err;
 
-                            res.redirect('/login');
+                            res.redirect('/admin/login');
                         })
                     });
                 });

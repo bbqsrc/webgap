@@ -3,13 +3,17 @@ block content
   .page-header
     h1 Ballots
 
-  strong
-    | Ballots: 
-  span= count
+  p
+    strong Ballots: 
+    span= count
 
   ul.ballots
     for ballot in ballots
       li.ballot
+        p
+          strong ID: 
+          span= util.uuid.fromMongo(ballot.token)
+
         strong Elections
         ul
           if ballot.ballot.elections

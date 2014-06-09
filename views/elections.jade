@@ -6,7 +6,7 @@ block content
     thead
       tr
         th Title
-        th Tokens
+        th Participants
         th Start Time
         th End Time
     tbody
@@ -14,8 +14,8 @@ block content
         tr
           td
             a(href="/admin/election/" + election.slug)= election.title
-          td= election.tokens
+          td= election.participants
           td= election.startTime
-          td= election.endtime
+          td= election.endTime
 
 
