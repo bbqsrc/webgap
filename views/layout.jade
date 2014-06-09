@@ -19,12 +19,12 @@ html(lang="en")
             span.icon-bar
             span.icon-bar
             span.icon-bar
-          a.navbar-brand(href='/').
+          a.navbar-brand(href='/admin').
             Stopgap
         #navbar-content.navbar-collapse.collapse
           ul.nav.navbar-nav
             li
-              a(href='/elections').
+              a(href='/admin/elections').
                 All Elections
             //li
             //  a(href='/elections/running').
@@ -34,11 +34,11 @@ html(lang="en")
             //    Closed Elections
           ul.nav.navbar-nav.navbar-right
             li
-              a(href='/logout')
+              a(href='/admin/logout')
                 i.glyphicon.glyphicon-log-out
                 |  Logout
           .navbar-form.navbar-right
-            a.btn.btn-success(href='/elections/create')
+            a.btn.btn-success(href='/admin/elections/create')
               i.glyphicon.glyphicon-file
               |  Create Election
     .container

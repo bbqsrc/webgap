@@ -3,7 +3,7 @@ block content
   .page-header
     h1= title
 
-  form.col-sm-8.col-sm-offset-2(method="POST")
+  form.col-sm-8.col-sm-offset-2(method="POST", enctype="multipart/form-data")
     h2 Election Details
     .form-group
       label.control-label(for='fld1') Election Name
@@ -37,7 +37,7 @@ block content
       input.form-control(placeholder='Voting Token Inside!', type='text', name='emailSubject', id='fld-email2')
     .form-group
       label.control-label(for='fld-email3') Body
-      textarea.form-control(name='emailBody', id='fld-email3').
+      textarea.form-control(name='emailBody', id='fld-email3', rows='8').
         Dear person,
 
         Vote here: {url}
@@ -47,7 +47,7 @@ block content
       .help-block Body must include the {url} token or people won't be able to access the voting page!
     .form-group
       label.control-label(for='fld-email4') Recipients
-      textarea.form-control(placeholder='foo@bar.lol', name='emailRecipients', id='fld-email4').
+      textarea.form-control(placeholder='foo@bar.lol', name='emailRecipients', id='fld-email4', rows='8').
       .help-block One email address per line.
 
     h2 Required files
