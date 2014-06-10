@@ -1,8 +1,11 @@
+"use strict";
+
 var express = require('express'),
     passport = require('passport'),
     uuid = require('uuid'),
     MongoClient = require('mongodb').MongoClient,
     util = require('../util.js'),
+    config = require('../config.js'),
     UserUtil = util.UserUtil,
     isAdmin = util.middleware.isAdmin('/admin'),
     parseFormData = util.middleware.parseFormData,
@@ -13,7 +16,7 @@ router.get('/', isAdmin, function(req, res) {
 });
 
 router.get('/elections', isAdmin, function(req, res) {
-    MongoClient.connect('mongodb://localhost:27017/stopgap', function(err, db) {
+    MongoClient.connect(config.mongoURL, function(err, db) {
         if (err) throw err;
         
         var parsed = [];
@@ -65,7 +68,7 @@ router.get("/election/:slug", isAdmin, function(req, res) {
 router.get("/ballots/:slug", isAdmin, function(req, res) {
     var slug = req.params.slug;
     
-    MongoClient.connect('mongodb://localhost:27017/stopgap', function(err, db) {
+    MongoClient.connect(config.mongoURL, function(err, db) {
         if (err) throw err;
 
         var elections = db.collection('elections'),
@@ -109,7 +112,7 @@ router.route('/create-account')
             submit: "Create Account"
         });
     } else { 
-        MongoClient.connect('mongodb://localhost:27017/stopgap', function(err, db) {
+        MongoClient.connect(config.mongoURL, function(err, db) {
             if (err) throw err;
 
             var users = db.collection('users');
@@ -131,12 +134,13 @@ router.route('/create-account')
     }
 })
 .post(function(req, res) {
+    // TODO: refactor, this method is just stupid and repetitive
     if (req.user && req.user.admin) {
         if (!req.body.username || !req.body.password) {
             res.send(400, "You broke it.");
         }
         
-        MongoClient.connect('mongodb://localhost:27017/stopgap', function(err, db) {
+        MongoClient.connect(config.mongoURL, function(err, db) {
             if (err) throw err;
 
             var users = db.collection('users');
@@ -167,7 +171,7 @@ router.route('/create-account')
             });
         });
     } else {
-        MongoClient.connect('mongodb://localhost:27017/stopgap', function(err, db) {
+        MongoClient.connect(config.mongoURL, function(err, db) {
             if (err) throw err;
 
             var users = db.collection('users');

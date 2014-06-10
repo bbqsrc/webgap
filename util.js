@@ -1,20 +1,68 @@
 "use strict";
 
 var formidable = require('formidable'),
+    async = require('async'),
     crypto = require('crypto'),
     uuid = require('uuid'),
     mongodb = require('mongodb'),
+    cheerio = require('cheerio'),
     moment = require('moment'),
     zlib = require('zlib'),
     tar = require('tar'),
     mkdirp = require('mkdirp'),
     fs = require('fs'),
+    path = require('path'),
     schedule = require('node-schedule'),
     MongoClient = mongodb.MongoClient,
     LocalStrategy = require('passport-local').Strategy,
-    scheduler = require('./scheduler').scheduler;
+    scheduler = require('./scheduler'),
+    config = require('./config'),
+    util = {},
+    MAX_UINT32 = Math.pow(2, 32) - 1;
 
-var util = {};
+exports.fromMongo = function(obj) {
+    // TODO: generic handler for mongo objects that does what we want.
+    // eg handling UUIDs automatically, handling dates, etc
+};
+
+exports.crypto = util.crypto = {
+    shuffle: function(list) {
+        // TODO: Fisher-Yates with strong RNG
+        // Unbiased range of numbers as well
+    },
+
+    randomInsert: function(list, item) {
+        // Fisher-Yates insertion!
+        list.splice(util.crypto.range(0, list.length), 0, item);
+        return list;
+    },
+
+    range: function(min, max) {
+        var n = max - min + 1,
+            remainder = MAX_UINT32 % n,
+            x;
+
+        do {
+            x = crypto.randomBytes(4).readUInt32LE(0);
+        } while (x >= MAX_UINT32 - remainder);
+
+        return min + x % n;
+    },
+
+    testRange: function(iterations, min, max) {
+        var i, ii, c = {};
+
+        for (i = min; i <= max; ++i) {
+            c[i] = 0;
+        }
+
+        for (i = 0; i < iterations; ++i) {
+            c[util.crypto.range(min, max)]++;
+        }
+
+        return c;
+    }
+}
 
 util.uuid = exports.uuid = {
     toMongo: function(data) {
@@ -46,19 +94,126 @@ util.uuid = exports.uuid = {
     }
 };
 
-util.elections = exports.elections = {
-    sendEmails: function(election, callback) {
-        // TODO: implement sending
+exports.startScheduler = function() {
+    MongoClient.connect(config.mongoURL, function(err, db) {
+        if (err) throw err;
 
-        election.participants.forEach(function(r) {
-            if (!r.sent) {
-                console.log("Emailing: " + r.email);
+        var elections = db.collection('elections');
+
+        elections.find({ endTime: { $gte: new Date }}).each(function(err, item) {
+            if (err) throw err;
+
+            if (item == null) {
+                return;
             }
+            
+            scheduler.add(item.startTime, function() {
+                console.log("- Sending emails for " + item.slug);
+                util.elections.sendEmails(item.slug);
+            });
+
+            scheduler.add(item.endTime, function() {
+                // Do something here?
+                console.log(item.slug + " has ended.");
+            });
+        });
+    });
+};
+
+util.path = exports.path = {
+    data: function() {
+        var joinedPath = path.join(config.dataDir, path.join.apply(null, arguments));
+
+        if (joinedPath.substring(0, config.dataDir.length) != config.dataDir) {
+            throw Error("This path is dodgy.");
+        }
+
+        console.log(joinedPath);
+        return joinedPath;
+    }
+}
+
+util.mongo = {
+    collection: function(collection, callback) {
+        MongoClient.connect(config.mongoURL, function(err, db) {
+            if (err) return callback(err, null);
+
+            var coll = db.collection(collection);
+            callback(null, coll);
+        });
+    }
+};
+
+util.elections = exports.elections = {
+    render: function(slug, res) {
+        var dir = util.path.data(slug);
+
+        res.sendfile("index.html", { root: dir });
+    },
+
+    renderStatic: function(req, res) {
+        var dir = util.path.data(req.params.slug, "static");
+
+        if (!req.params[0]) res.send(403, 'bad.');
+
+        res.sendfile(req.params[0], { root: dir });
+    },
+
+    find: function(slug, callback) {
+        util.mongo.collection('elections', function(err, elections) {
+            if (err) return callback(err, null);
+
+            elections.findOne({ slug: slug }, function(err, item) {
+                return callback(err, item);
+            });
+        });
+    },
+    
+    sendEmails: function(slug) {
+        util.mongo.collection('elections', function(err, elections) {
+            if (err) throw err;
+
+            elections.findOne({slug: slug}, function(err, election) {
+                if (err) throw err;
+
+                var len = election.tokens.length;
+
+                async.eachSeries(election.participants, function(r, done) {
+                    var token;
+                    
+                    if (r.sent) return done();
+
+                    token = util.uuid.toMongo();
+                    
+                    console.log("Emailing: " + r.email);
+                    
+                    // XXX: send code goes here
+                    
+                    // Safely insert token and toggle sent trigger.
+                    elections.update({
+                        slug: slug,
+                        "participants.email": r.email
+                    }, {
+                        $set: { "participants.$.sent": true },
+                        $push: { tokens: {
+                            $each: [token],
+                            $position: util.crypto.range(0, len++)
+                        }}
+                    }, {w:1}, function(err) {
+                        if (err) throw err;
+                        return done();
+                    });
+
+                }, function(err) {
+                    if (err) throw err;
+                    console.log("- All emails sent for " + slug);
+                });
+            });
         });
     },
 
     checkParams: function(slug, id, callback) {
-        MongoClient.connect('mongodb://localhost:27017/stopgap', function(err, db) {
+        MongoClient.connect(config.mongoURL, function(err, db) {
             if (err) return callback(err, null);
 
             var elections = db.collection('elections');
@@ -101,11 +256,32 @@ util.elections = exports.elections = {
         });
     },
 
-    storeElectionFiles: function(slug, zipFile, callback) {
-        // TODO less hardcoded paths
+    addBaseTag: function(slug, callback) {
+        var path = util.path.data(slug, 'index.html');
 
+        fs.readFile(path, { encoding: 'utf-8' }, function(err, file) {
+            if (err) callback(err);
+            
+            var $ = cheerio.load(file, { decodeEntities: false }),
+                base = $("base"),
+                href = "/" + slug  + "/static/";
+            
+            if (base.length) {
+                base.attr('href', href);
+            } else {
+                $("head").prepend("<base href='" + href + "'>");
+            }
+
+            fs.writeFile(path, $.html(), function(err) {
+                callback(err || null);
+            });
+        });
+    },
+
+    storeElectionFiles: function(slug, zipFile, callback) {
         // Let's get out the relevant files!
-        var path = __dirname + '/data/' + slug;
+        var path = util.path.data(slug);
+
         mkdirp(path, function(err) {
             if (err) callback(err);
 
@@ -116,13 +292,13 @@ util.elections = exports.elections = {
             })).on('error', function(err) {
                 callback(err);
             }).on("end", function() {
-                callback(null);
+                util.elections.addBaseTag(slug, callback);
             });
         });
     },
 
     getElection: function(slug, callback) {
-        MongoClient.connect('mongodb://localhost:27017/stopgap', function(err, db) {
+        MongoClient.connect(config.mongoURL, function(err, db) {
             if (err) return callback(err, null);
             
             var elections = db.collection('elections');
@@ -134,14 +310,18 @@ util.elections = exports.elections = {
         });
     },
 
+    // TODO
+    removeElection: function() {},
+
     createElection: function(req, res, fields, files) {
-        MongoClient.connect('mongodb://localhost:27017/stopgap', function(err, db) {
+        MongoClient.connect(config.mongoURL, function(err, db) {
             if (err) return callback(err, null);
             
+            var slug = fields.slug;
             var elections = db.collection('elections');
             var ballots = db.collection('ballots');
 
-            elections.findOne({slug: fields.slug}, function(err, election) {
+            elections.findOne({slug: slug}, function(err, election) {
                 if (err) callback(err, null);
 
                 if (election != null) {
@@ -149,12 +329,12 @@ util.elections = exports.elections = {
                     return;
                 }
                 
-                var startTime = moment(fields.startDate + "T" + fields.startTime).toDate(),
-                    endTime = moment(fields.endDate + "T" + fields.endTime).toDate(),
+                var startTime = moment(fields.startDate + "T" + fields.startTime + ":00.000Z").toDate(),
+                    endTime = moment(fields.endDate + "T" + fields.endTime + ":00.000Z").toDate(),
                     o, i, ii, emails;
 
                 o = {
-                    slug: fields.slug,
+                    slug: slug,
                     title: fields.title,
                     email: {
                         from: fields.emailFrom,
@@ -164,7 +344,8 @@ util.elections = exports.elections = {
                     participants: [],
                     tokens: [],
                     startTime: startTime,
-                    endTime: endTime
+                    endTime: endTime,
+                    testToken: util.uuid.toMongo()
                 };
 
                 emails = fields.emailRecipients.replace(/\r/g, '').split('\n');
@@ -172,14 +353,16 @@ util.elections = exports.elections = {
                     o.participants.push({ email: emails[i].trim(), sent: false }); 
                 }
 
-                util.elections.storeElectionFiles(o.slug, files.tgzFile, function(err) {
+                util.elections.storeElectionFiles(slug, files.tgzFile, function(err) {
                     if (err) throw err;                                
+                    
                     elections.insert(o, {w:1}, function(err) {
                         if (err) throw err;
 
                         scheduler.add(o.startTime, function() {
-                            util.elections.sendEmails(o);
+                            util.elections.sendEmails(slug);
                         });
+
                         res.redirect('/admin/election/' + o.slug);
                     });
                 });
@@ -269,7 +452,7 @@ var UserUtil = exports.UserUtil = {
 };
 
 exports.localStrategy = new LocalStrategy(function(username, password, done) {
-    MongoClient.connect('mongodb://localhost:27017/stopgap', function(err, db) {
+    MongoClient.connect(config.mongoURL, function(err, db) {
         var users = db.collection('users');
         users.findOne({username: username}, function(err, user) {
             if (err) return done(err);

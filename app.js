@@ -5,7 +5,6 @@ var express = require('express'),
     passport = require('passport'),
     moment = require('moment'),
     util = require('./util'),
-    scheduler = require('./scheduler').scheduler,
     app = express(),
     server;
 
@@ -20,20 +19,17 @@ app.use(require('connect-flash')());
 app.use(require('express-session')({ secret: 'such webgap oh my' }));
 app.use(passport.initialize());
 app.use(passport.session());
+passport.use(util.localStrategy);
+passport.serializeUser(function(user, done) { done(null, user); });
+passport.deserializeUser(function(user, done) { done(null, user); });
 
+// Schedule start events!
+util.startScheduler();
 
-passport.use(require('./util.js').localStrategy);
-
-passport.serializeUser(function(user, done) {
-    done(null, user);
-});
-
-passport.deserializeUser(function(user, done) {
-    done(null, user);
-});
-
-//app.use('/', require('./routes/main').router);
+// Routes
 app.use('/admin', require('./routes/admin').router);
+//app.use('/results', require('./routes/results').router);
+app.use('/', require('./routes/main').router);
 
 // Error handling
 app.use(function(err, req, res, next) {
@@ -43,6 +39,7 @@ app.use(function(err, req, res, next) {
     res.send(500, "The server broke. Sorry!");
 });
 
+// 404 fallback
 app.use(function(req, res, next) {
     res.send(404, 'Nothing found.');
 });
@@ -51,4 +48,3 @@ server = app.listen(3001, function() {
     console.log('Listening on port %d', server.address().port);
 });
 
-exports.app = app;

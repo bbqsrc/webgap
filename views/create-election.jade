@@ -15,18 +15,30 @@ block content
     h2 Date and Time
     .row
       .form-group.col-sm-6
-        label.control-label(for='fld31') Start Date 
-        input.form-control(placeholder='2014-12-31', type='date', name='startDate', id='fld31')
+        label.control-label(for='startDate') Start Date
+        .input-group
+          input.form-control(placeholder='2014-12-31', type='date', name='startDate', id='startDate')
+          span.input-group-btn
+            button.btn.btn-primary.btn-start-date-today(type='button', style='width: 6em') Today
       .form-group.col-sm-6
-        label.control-label(for='fld32') Start Time 
-        input.form-control(placeholder='23:59', type='time', name='startTime', id='fld32')
+        label.control-label(for='startTime') Start Time 
+        .input-group
+          input.form-control(placeholder='23:59', type='time', name='startTime', id='startTime')
+          span.input-group-btn
+            button.btn.btn-primary.btn-start-time-now(type='button', style='width: 6em') Now
     .row
       .form-group.col-sm-6
-        label.control-label(for='fld41') End Date
-        input.form-control(placeholder='2015-01-31', type='date', name='endDate', id='fld41')
+        label.control-label(for='endDate') End Date
+        .input-group
+          input.form-control(placeholder='2015-01-31', type='date', name='endDate', id='endDate')
+          span.input-group-btn
+            button.btn.btn-primary.btn-end-date-7days(type='button', style='width: 6em') +7 Days
       .form-group.col-sm-6
-        label.control-label(for='fld42') End Time
-        input.form-control(placeholder='23:59', type='time', name='endTime', id='fld42')
+        label.control-label(for='endTime') End Time
+        .input-group
+          input.form-control(placeholder='23:59', type='time', name='endTime', id='endTime')
+          span.input-group-btn
+            button.btn.btn-primary.btn-end-time-6pm(type='button', style='width: 6em') 6:00 pm
     
     h2 Email
     .form-group
@@ -68,3 +80,26 @@ block content
 
     hr
 
+    script.
+      $(".btn-start-date-today").on('click', function() {
+          var date = new Date().toISOString().split("T")[0];
+          $("#startDate")[0].value = date;
+      });
+
+      $(".btn-start-time-now").on('click', function() {
+          var time = new Date();
+          time = time.getHours() + ":" + time.getMinutes();
+          $("#startTime")[0].value = time;
+      });
+
+
+      $(".btn-end-date-7days").on('click', function() {
+          var date = new Date;
+          date.setDate(date.getDate() + 7);
+          date = date.toISOString().split("T")[0];
+          $("#endDate")[0].value = date;
+      });
+
+      $(".btn-end-time-6pm").on('click', function() {
+          $("#endTime")[0].value = "18:00";
+      });

@@ -44,36 +44,6 @@ Scheduler.prototype = {
     }
 };
 
-var startScheduler = function() {
-    var sch = new Scheduler;
+var scheduler = new Scheduler;
 
-    MongoClient.connect('mongodb://localhost:27017/stopgap', function(err, db) {
-        if (err) throw err;
-
-        var elections = db.collection('elections');
-
-        elections.find({ endTime: { $gte: new Date }}).each(function(err, item) {
-            if (err) throw err;
-
-            console.log(item);
-
-            if (item == null) {
-                return;
-            }
-            
-            sch.add(item.startTime, function() {
-                console.log("Sending emails for " + item.slug);
-                util.elections.sendEmails(item);
-            });
-
-            sch.add(item.endTime, function() {
-                // Do something here?
-                console.log(item.slug + " has ended.");
-            });
-        });
-    });
-
-    return sch;
-};
-
-exports.scheduler = startScheduler();
+Object.defineProperty(module, 'exports', { get: function() { return scheduler; }, enumerable: true});
