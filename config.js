@@ -1,4 +1,5 @@
 var baseConfig,
+    crypto = require('crypto'),
     _ = require('underscore');
 
 try {
@@ -9,16 +10,21 @@ try {
 }
 
 var config = _.defaults(baseConfig, {
+    production: false,
+    host: "localhost",
+
     mongoHost: "localhost",
     mongoPort: 27017,
     mongoDB: "stopgap",
     mongoUsername: null,
     mongoPassword: null,
-    
-    SMTPHost: "localhost",
-    SMTPPort: 53,
-    SMTPUsername: null,
-    SMTPPassword: null,
+   
+    mailerTransport: "sendmail",
+    mailerConfig: {},
+
+    cookieSecret: crypto.randomBytes(64).toString(),
+    cookieName: "stopgap.id",
+    cookieMaxAge: 900000,
 
     dataDir: __dirname + '/data',
 

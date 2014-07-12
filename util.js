@@ -12,7 +12,9 @@ var formidable = require('formidable'),
     mkdirp = require('mkdirp'),
     fs = require('fs'),
     path = require('path'),
+    spawn = require('child_process').spawn,
     schedule = require('node-schedule'),
+    nodemailer = require('nodemailer'),
     MongoClient = mongodb.MongoClient,
     LocalStrategy = require('passport-local').Strategy,
     scheduler = require('./scheduler'),
@@ -20,9 +22,35 @@ var formidable = require('formidable'),
     util = {},
     MAX_UINT32 = Math.pow(2, 32) - 1;
 
+function newError(message, name) {
+    var err = new Error(message);
+    err.name = name;
+    return err;
+}
+
 exports.fromMongo = function(obj) {
     // TODO: generic handler for mongo objects that does what we want.
     // eg handling UUIDs automatically, handling dates, etc
+};
+
+exports.Counter = function() {
+    this._data = {};
+};
+
+exports.Counter.prototype = {
+    inc: function() {
+        var x, prop,
+            args = Array.prototype.slice.call(arguments);
+        
+        if (arguments.length == 0) {
+            throw new TypeError("needs at least one key");
+        }
+
+        x = this._data;
+
+        // TODO FINISH THIS
+        // allow inc('foo', 'bar', 'bat') -> _data.foo.bar.bat += 1
+    }
 };
 
 exports.crypto = util.crypto = {
@@ -66,7 +94,7 @@ exports.crypto = util.crypto = {
 
 util.uuid = exports.uuid = {
     toMongo: function(data) {
-        var buffer = data ? uuid.parse(data) : new Buffer(16);
+        var buffer = new Buffer(data ? uuid.parse(data) : 16);
         
         if (!data) uuid.v4(null, buffer);
 
@@ -74,7 +102,7 @@ util.uuid = exports.uuid = {
     },
 
     fromMongo: function(obj) {
-        return uuid.unparse(obj.read(0, 16));
+        return util.uuid.stripDashes(uuid.unparse(obj.read(0, 16)));
     },
 
     addDashes: function(str) {
@@ -128,7 +156,6 @@ util.path = exports.path = {
             throw Error("This path is dodgy.");
         }
 
-        console.log(joinedPath);
         return joinedPath;
     }
 }
@@ -151,6 +178,12 @@ util.elections = exports.elections = {
         res.sendfile("index.html", { root: dir });
     },
 
+    renderSuccess: function(slug, res) {
+        var dir = util.path.data(slug);
+
+        res.sendfile("success.html", { root: dir });
+    },
+
     renderStatic: function(req, res) {
         var dir = util.path.data(req.params.slug, "static");
 
@@ -168,6 +201,25 @@ util.elections = exports.elections = {
             });
         });
     },
+
+    getBallots: function(slug, callback) {
+        MongoClient.connect(config.mongoURL, function(err, db) {
+            if (err) return callback(err, null);
+
+            var elections = db.collection('elections'),
+                ballots = db.collection('ballots');
+
+            elections.findOne({slug: slug}, function(err, election) {
+                if (err) return callback(err, null);
+
+                if (election == null) {
+                    return callback(null, null);
+                }
+
+                return callback(null, ballots.find({election_id: election._id}))
+            });
+        });
+    },
     
     sendEmails: function(slug) {
         util.mongo.collection('elections', function(err, elections) {
@@ -176,7 +228,9 @@ util.elections = exports.elections = {
             elections.findOne({slug: slug}, function(err, election) {
                 if (err) throw err;
 
-                var len = election.tokens.length;
+                var len = election.tokens.length,
+                    mailer = nodemailer.createTransport(config.mailerTransport,
+                                                        config.mailerConfig);
 
                 async.eachSeries(election.participants, function(r, done) {
                     var token;
@@ -187,24 +241,42 @@ util.elections = exports.elections = {
                     
                     console.log("Emailing: " + r.email);
                     
-                    // XXX: send code goes here
-                    
-                    // Safely insert token and toggle sent trigger.
-                    elections.update({
-                        slug: slug,
-                        "participants.email": r.email
-                    }, {
-                        $set: { "participants.$.sent": true },
-                        $push: { tokens: {
-                            $each: [token],
-                            $position: util.crypto.range(0, len++)
-                        }}
-                    }, {w:1}, function(err) {
-                        if (err) throw err;
-                        return done();
+                    mailer.sendMail({
+                        from: election.email.from,
+                        to: r.email,
+                        subject: election.email.subject,
+                        text: election.email.content.replace("{url}",
+                                                             "https://" +
+                                                             config.host + "/" +
+                                                             slug + "/" + 
+                                                             util.uuid.fromMongo(token))
+                    }, function(err, resp) {
+                        if (err) {
+                            console.error("Error emailing '" + r.email + "'!");
+                            console.error(err.stack);
+                            
+                            // Don't do anything, basically rollback.
+                            return done();
+                        }
+
+                        // Safely insert token and toggle sent trigger.
+                        elections.update({
+                            slug: slug,
+                            "participants.email": r.email
+                        }, {
+                            $set: { "participants.$.sent": true },
+                            $push: { tokens: {
+                                $each: [token],
+                                $position: util.crypto.range(0, len++)
+                            }}
+                        }, {w:1}, function(err) {
+                            if (err) throw err;
+                            return done();
+                        });
                     });
 
                 }, function(err) {
+                    mailer.close();
                     if (err) throw err;
                     console.log("- All emails sent for " + slug);
                 });
@@ -223,30 +295,33 @@ util.elections = exports.elections = {
                 if (err) return callback(err, null);
 
                 if (election == null) {
-                    return callback(new Error('No election found.'), null);
+                    return callback(newError('No election found.', 'ELECTION'), null);
                 }
 
                 var time = Date.now();
 
-                if (election.startTime == null || election.startTime < time) {
-                    return callback(new Error('Election has not begun yet.'), null);
+                if (election.startTime == null || +election.startTime > time) {
+                    return callback(newError('Election has not begun yet.', 'ELECTION'), null);
                 }
 
-                if (election.endTime != null && election.endTime < time) {
-                    return callback(new Error('Election has ended.'), null);
+                if (election.endTime != null && +election.endTime < time) {
+                    return callback(newError('Election has ended.', 'ELECTION'), null);
                 }
 
                 var token = util.uuid.toMongo(id);
                 
-                if (!(token in election.tokens)) {
-                    return callback(new Error('Invalid token.'), null);
-                }
+                // This is purposely checked after the elections begin and end to limit the
+                // potential to bruteforce a token successfully (even though it's impossible*)
 
+                if (!(token in election.tokens) && id != util.uuid.fromMongo(election.testToken)) {
+                    return callback(newError('Invalid token.', 'ELECTION'), null);
+                }
+                
                 ballots.findOne({election_id: election._id, token: token}, function(err, ballot) {
                     if (err) return callback(err, null);
 
                     if (ballot != null) {
-                        return callback(new Error('A ballot has already been submitted."'), null);
+                        return callback(newError('A ballot has already been submitted.', 'ELECTION'), null);
                     }
 
                     return callback(null, { election: election, token: token }); 
@@ -256,8 +331,8 @@ util.elections = exports.elections = {
         });
     },
 
-    addBaseTag: function(slug, callback) {
-        var path = util.path.data(slug, 'index.html');
+    addBaseTag: function(slug, fn, callback) {
+        var path = util.path.data(slug, fn);
 
         fs.readFile(path, { encoding: 'utf-8' }, function(err, file) {
             if (err) callback(err);
@@ -292,7 +367,9 @@ util.elections = exports.elections = {
             })).on('error', function(err) {
                 callback(err);
             }).on("end", function() {
-                util.elections.addBaseTag(slug, callback);
+                util.elections.addBaseTag(slug, 'index.html', function() {
+                    util.elections.addBaseTag(slug, 'success.html', callback);
+                });
             });
         });
     },
@@ -307,6 +384,59 @@ util.elections = exports.elections = {
 
                 callback(null, election);
             });
+        });
+    },
+
+    insertBallot: function(ballot, callback) {
+        MongoClient.connect(config.mongoURL, function(err, db) {
+            if (err) return callback(err);
+
+            var elections = db.collection('elections');
+            var ballots = db.collection('ballots');
+
+            // Check that token exists in election
+            elections.findOne({_id: ballot.election_id, tokens: ballot.token}, function(err, election) {
+                if (err) return callback(err);
+                
+                if (election == null) {
+                    return callback(newError("Specified token is not valid " +
+                                             "for specified election.", "ELECTION"));
+                } else {
+                    // Check that a ballot doesn't already exist
+                    
+                    ballots.findOne({election_id: ballot.election_id, token: ballot.token}, function(err, ballot) {
+                        if (err) return callback(err, null);
+
+                        if (ballot == null) {
+                            ballots.insert(ballot, {w:1}, function(err) {
+                                if (err) return callback(err);
+                                
+                                return callback(null);
+                            });
+                        } else {
+                            return callback(newError("A ballot has already been submitted for this token.", "ELECTION"));
+                        }
+                    });
+                    
+                }
+            });
+        });
+    },
+
+    // TODO: countgap subprocess ohohohoh
+    // Will need to manage state to ensure no conflicting iterations 
+    generateResults: function(slug, callback) {
+        // TODO: store a list of elections on the election itself.
+        // TODO: store a list of candidates there too.
+        var proc = spawn('python', ['../countgap/count.py', slug]),
+            data = '';
+
+        proc.stdout.on('data', function(chunk) {
+            data += chunk;
+        });
+
+        proc.on('close', function(code) {
+            callback(code, data);
         });
     },
 
@@ -329,13 +459,18 @@ util.elections = exports.elections = {
                     return;
                 }
                 
-                var startTime = moment(fields.startDate + "T" + fields.startTime + ":00.000Z").toDate(),
-                    endTime = moment(fields.endDate + "T" + fields.endTime + ":00.000Z").toDate(),
+                var dateFormat = "YYYY-MM-DDhh:mmZ",
+                    timezone = (parseInt(fields.timezone, 10) >= 0 ? "+" : "-") + fields.timezone,
+                    startTime = moment(fields.startDate + fields.startTime + 
+                                       timezone, dateFormat).toDate(),
+                    endTime = moment(fields.endDate + fields.endTime + 
+                                     timezone, dateFormat).toDate(),
                     o, i, ii, emails;
 
                 o = {
                     slug: slug,
                     title: fields.title,
+                    type: "election", // TODO: introduce type survey
                     email: {
                         from: fields.emailFrom,
                         subject: fields.emailSubject,
@@ -347,6 +482,9 @@ util.elections = exports.elections = {
                     endTime: endTime,
                     testToken: util.uuid.toMongo()
                 };
+
+                //XXX: we should probably validate ballot content to ensure it is accurate
+                // at some point. 
 
                 emails = fields.emailRecipients.replace(/\r/g, '').split('\n');
                 for (i = 0, ii = emails.length; i < ii; ++i) {
@@ -390,7 +528,7 @@ exports.middleware = {
                 }
                 return res.send(403);
             } else {
-                return res.redirect(mountPoint + '/login');
+                return res.redirect(mountPoint + '/login?r=' + encodeURIComponent(req.originalUrl));
             }
         }   
     },
@@ -418,7 +556,7 @@ var UserUtil = exports.UserUtil = {
             crypto.pbkdf2(password, buf, UserUtil._iterations, UserUtil._keylen, function(err, data) {
                 if (err) throw err;
 
-                callback({
+                callback(null, {
                     algorithm: "sha1",
                     salt: buf,
                     iterations: UserUtil._iterations,
@@ -446,7 +584,7 @@ var UserUtil = exports.UserUtil = {
                 diff |= key[i] ^ newKey[i];
             }
 
-            callback(diff === 0);
+            callback(err, diff === 0);
         });
     }
 };
@@ -462,12 +600,12 @@ exports.localStrategy = new LocalStrategy(function(username, password, done) {
             }
 
             var dbPassword = {
-                key: user.password.key.read(),
+                key: user.password.key.read(0),
                 iterations: user.password.iterations,
-                salt: user.password.salt.read()
+                salt: user.password.salt.read(0)
             }
 
-            UserUtil.checkPassword(password, dbPassword, function(success) {
+            UserUtil.checkPassword(password, dbPassword, function(err, success) {
                 if (success) {
                     return done(null, {username: username, admin: user.admin});
                 } else {

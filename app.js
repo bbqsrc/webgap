@@ -5,6 +5,7 @@ var express = require('express'),
     passport = require('passport'),
     moment = require('moment'),
     util = require('./util'),
+    config = require('./config'),
     app = express(),
     server;
 
@@ -15,8 +16,16 @@ app.use(express.static(__dirname + '/public'));
 app.use(connect.logger('dev'));
 app.use(require('body-parser')());
 app.use(require('cookie-parser')());
+app.use(require('express-session')({
+    name: config.cookieName,
+    secret: config.cookieSecret,
+    cookie: {
+        maxAge: config.cookieMaxAge,
+        secure: config.production
+    },
+    proxy: true
+}));
 app.use(require('connect-flash')());
-app.use(require('express-session')({ secret: 'such webgap oh my' }));
 app.use(passport.initialize());
 app.use(passport.session());
 passport.use(util.localStrategy);
@@ -41,7 +50,7 @@ app.use(function(err, req, res, next) {
 
 // 404 fallback
 app.use(function(req, res, next) {
-    res.send(404, 'Nothing found.');
+    res.status(404).render('404');
 });
 
 server = app.listen(3001, function() {

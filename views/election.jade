@@ -30,9 +30,15 @@ block content
             span= value.length
           else
             span= value
-  
-  a.btn.btn-primary(href="/admin/ballots/" + election.slug).
-    See Ballots
 
+  if election.testToken
+    a.btn.btn-primary(href='/' + election.slug + '/' + util.uuid.fromMongo(election.testToken)).
+      Test Ballot
+
+  a.btn.btn-primary(href="/admin/ballots/" + election.slug).
+    Ballots
+
+  a.btn.btn-primary(href='/admin/results/' + election.slug).
+    Results
 
 

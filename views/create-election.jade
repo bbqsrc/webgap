@@ -12,7 +12,8 @@ block content
       label.control-label(for='fld2') Slug 
       input.form-control(placeholder='best-election', type='text', name='slug', id='fld2')
 
-    h2 Date and Time
+    .row
+      h2 Date and Time
     .row
       .form-group.col-sm-6
         label.control-label(for='startDate') Start Date
@@ -39,7 +40,12 @@ block content
           input.form-control(placeholder='23:59', type='time', name='endTime', id='endTime')
           span.input-group-btn
             button.btn.btn-primary.btn-end-time-6pm(type='button', style='width: 6em') 6:00 pm
-    
+     .row 
+       .form-group.col-sm-6.col-sm-offset-6
+         label.control-label(for='timezone') Timezone
+         input(type='hidden', name='timezone', id='timezone')
+         .timezone-human
+         .help-block Please set your date and time relative to this timezone.
     h2 Email
     .form-group
       label.control-label(for='fld-email1') From
@@ -70,8 +76,6 @@ block content
         | This tarball must contain the following:
         ul
           li index.html (actual form)
-          li success.html (page to go to when success occurs)
-          li failure.html (page to go to when failure occurs)
           li static/ directory with all dependencies
         | A <base> tag will be injected in order to fix dependency links.
         | Please reference all deps from a relative "static" directory (no slash at the front).
@@ -81,14 +85,20 @@ block content
     hr
 
     script.
+      var dateVal = new Date().getTimezoneOffset() * 100 / -60;
+
+      $("#timezone").val(dateVal);
+      $('.timezone-human').text('UTC' + (dateVal >= 0 ? "+" : "-") + (dateVal / 100));
+
       $(".btn-start-date-today").on('click', function() {
           var date = new Date().toISOString().split("T")[0];
           $("#startDate")[0].value = date;
       });
 
       $(".btn-start-time-now").on('click', function() {
-          var time = new Date();
-          time = time.getHours() + ":" + time.getMinutes();
+          var time = new Date(),
+              m = time.getMinutes();
+          time = time.getHours() + ":" + (m < 10 ? "0" : "") + m;
           $("#startTime")[0].value = time;
       });
 

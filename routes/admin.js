@@ -15,6 +15,37 @@ router.get('/', isAdmin, function(req, res) {
     res.render('index', { title: "Index" }); 
 });
 
+/*
+// Email groups: eg Taswegia has all taswegians
+router.get('/participant-groups', isAdmin, function(req, res) {
+    
+});
+
+router.get('/participant-groups/create', isAdmin, function(req, res) {
+
+});
+
+router.route('/participant-group/:slug')
+.get(isAdmin, function(req, res) {
+
+})
+.put(isAdmin, function(req, res) {
+    
+})
+.delete(isAdmin, function(req, res) {
+    
+});
+
+// For handling combined elections
+router.get('/views', isAdmin, function(req, res) {
+
+});
+
+router.route('/views/create', isAdmin, function(req, res) {
+
+});
+*/
+
 router.get('/elections', isAdmin, function(req, res) {
     MongoClient.connect(config.mongoURL, function(err, db) {
         if (err) throw err;
@@ -38,7 +69,7 @@ router.get('/elections', isAdmin, function(req, res) {
             parsed.push({
                 slug: doc.slug,
                 title: doc.title || doc.slug,
-                tokens: doc.participants.length,
+                tokens: (doc.participants || {}).length,
                 startTime: doc.startTime,
                 endTime: doc.endTime
             });
@@ -61,7 +92,7 @@ router.get("/election/:slug", isAdmin, function(req, res) {
     util.elections.getElection(slug, function(err, election) {
         if (err) throw err;
         
-        res.render('election', { election: election });
+        res.render('election', { election: election, util: util });
     });
 });
 
@@ -85,6 +116,55 @@ router.get("/ballots/:slug", isAdmin, function(req, res) {
     });
 });
 
+router.get("/results/:slug", isAdmin, function(req, res) {
+    util.elections.getBallots(req.params.slug, function(err, ballots) {
+        if (ballots == null) {
+            res.send(500, "It shouldn't be possible to get into this state.");
+        }
+       
+        ballots.toArray(function(err, arr) {
+            res.render('results-table', { title: "Results Table",
+                       headers: arr[0].ballot, ballots: arr });
+        });
+    });
+    /*
+    util.elections.generateResults(req.params.slug, function(err, data) {
+        res.render('results-temp', { data: data });
+    });
+    */
+});
+
+/*
+router.get("/results/:slug/count", isAdmin, function(req, res) {
+    var slug = req.params.slug,
+        data = {};
+
+    util.elections.getBallots(slug, function(err, ballots) {
+        if (ballots == null) {
+            res.send(500, "It shouldn't be possible to get into this state.");
+        }
+        
+        ballots.each(function(err, item) {
+            var prop;
+            
+            if (err) throw err;
+
+            for (prop in item) {
+                if (prop == "_id" || prop == "elections") {
+                    continue;
+                }
+
+                if (prop == "motions") {
+                    // one day
+                    continue;
+                }
+
+            }
+        });
+    });
+});
+*/
+
 router.route("/login")
 .get(function(req, res) {
     res.render('create-account', {
@@ -92,11 +172,13 @@ router.route("/login")
         submit: "Sign in"
     });
 })
-.post(passport.authenticate('local', {
-    successRedirect: '/admin',
-    failureRedirect: '/admin/login',
-    failureFlash: true
-}));
+.post(passport.authenticate('local'), function(req, res) {
+    if (req.query.r != null) {
+        res.redirect(req.query.r);
+    } else {
+        res.redirect('/admin');
+    }
+});
 
 router.get('/logout', function(req, res) {
     req.logout();
@@ -158,7 +240,7 @@ router.route('/create-account')
                     return;
                 }
 
-                UserUtil.generatePassword(req.body.password, function(password) {
+                UserUtil.generatePassword(req.body.password, function(err, password) {
                     users.insert({username: req.body.username,
                                   password: password,
                                   uuid: uuid.v4(),
@@ -195,7 +277,7 @@ router.route('/create-account')
                         });
                     }
 
-                    UserUtil.generatePassword(req.body.password, function(password) {
+                    UserUtil.generatePassword(req.body.password, function(err, password) {
                         users.insert({username: req.body.username,
                                       password: password,
                                       admin: true}, {w:1}, function(err) {
