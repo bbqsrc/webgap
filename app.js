@@ -3,7 +3,6 @@
 var express = require('express'),
     connect = require('connect'),
     passport = require('passport'),
-    moment = require('moment'),
     util = require('./util'),
     config = require('./config'),
     app = express(),
