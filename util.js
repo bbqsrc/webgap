@@ -233,8 +233,8 @@ util.elections = exports.elections = {
                 if (err) throw err;
 
                 var len = election.tokens.length,
-                    mailer = nodemailer.createTransport(config.mailerTransport,
-                                                        config.mailerConfig);
+                    mailer = nodemailer.createTransport(config.mailerTransport(
+                                                        config.mailerConfig));
 
                 async.eachSeries(election.participants, function(r, done) {
                     var token;

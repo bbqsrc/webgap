@@ -1,6 +1,10 @@
 var baseConfig,
     crypto = require('crypto'),
-    _ = require('underscore');
+    _ = require('underscore'),
+    transports = {
+        sendmail: require('nodemailer-sendmail-transport'),
+        ses: require('nodemailer-ses-transport')
+    };
 
 try {
     baseConfig = require('./config.json')
@@ -9,7 +13,7 @@ try {
     baseConfig = {};
 }
 
-var config = _.defaults(baseConfig, {
+var config = _.defaults({}, baseConfig, {
     production: false,
     host: "localhost",
     port: 3001,
@@ -20,7 +24,7 @@ var config = _.defaults(baseConfig, {
     mongoUsername: null,
     mongoPassword: null,
    
-    mailerTransport: "sendmail",
+    mailerTransport: function(x) { return x; },
     mailerConfig: {},
 
     cookieSecret: crypto.randomBytes(64).toString(),
@@ -34,5 +38,13 @@ var config = _.defaults(baseConfig, {
         return "mongodb://" + this.mongoHost + ":" + this.mongoPort + "/" + this.mongoDB;
     }
 });
+
+if (baseConfig.mailerTransport) {
+    config.mailerTransport = transports[baseConfig.mailerTransport];
+
+    if (config.mailerTransport == null) {
+        throw new Error("invalid mailerTransport defined: '" + baseConfig.mailerTransport + "'");
+    }
+}
 
 module.exports = Object.freeze(config);
