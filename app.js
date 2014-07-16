@@ -11,6 +11,7 @@ var express = require('express'),
 
 app.set('views', __dirname + '/views');
 app.set('view engine', 'jade');
+app.enable('trust proxy');
 
 app.use(express.static(__dirname + '/public'));
 app.use(connect.logger());
