@@ -68,7 +68,6 @@ router.route('/:slug/:id')
             return;
         };
       
-        console.log(req.body);
         var o = {
             election_id: data.election._id,
             token: data.token,
