@@ -499,8 +499,7 @@ util.elections = exports.elections = {
 
                 //XXX: we should probably validate ballot content to ensure it is accurate
                 // at some point. 
-
-                emails = fields.emailRecipients.replace(/\r/g, '').split('\n');
+                emails = fields.emailRecipients.trim().replace(/(^ +| +$|\r)/gm, '').split('\n');
                 for (i = 0, ii = emails.length; i < ii; ++i) {
                     o.participants.push({ email: emails[i].trim(), sent: false }); 
                 }
