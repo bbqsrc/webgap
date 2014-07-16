@@ -117,6 +117,7 @@ router.get("/ballots/:slug", isAdmin, function(req, res) {
 });
 
 router.get("/results/:slug", isAdmin, function(req, res) {
+    /*
     util.elections.getBallots(req.params.slug, function(err, ballots) {
         if (ballots == null) {
             res.send(500, "It shouldn't be possible to get into this state.");
@@ -127,11 +128,10 @@ router.get("/results/:slug", isAdmin, function(req, res) {
                        headers: arr[0].ballot, ballots: arr });
         });
     });
-    /*
-    util.elections.generateResults(req.params.slug, function(err, data) {
-        res.render('results-temp', { data: data });
-    });
     */
+    util.elections.generateResults(req.params.slug, function(err, data) {
+        res.render('results-raw', { data: data });
+    });
 });
 
 /*
