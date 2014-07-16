@@ -304,10 +304,12 @@ util.elections = exports.elections = {
 
                 var time = Date.now();
 
+                // Election should continue unless it hasn't started or there is no start time.
                 if (election.startTime == null || +election.startTime > time) {
                     return callback(newError('Election has not begun yet.', 'ELECTION'), null);
                 }
 
+                // Election should continue if endTime is null or time limit hasn't been met
                 if (election.endTime != null && +election.endTime < time) {
                     return callback(newError('Election has ended.', 'ELECTION'), null);
                 }
@@ -408,8 +410,8 @@ util.elections = exports.elections = {
                                              "for specified election.", "ELECTION"));
                 } else {
                     // Check that a ballot doesn't already exist
-                    
-                    ballots.findOne({election_id: ballot.election_id, token: ballot.token}, function(err, ballotAlreadyExists) {
+                    ballots.findOne({election_id: ballot.election_id,
+                                    token: ballot.token}, function(err, ballotAlreadyExists) {
                         if (err) return callback(err, null);
 
                         if (!ballotAlreadyExists) {
