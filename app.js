@@ -5,6 +5,7 @@ var express = require('express'),
     passport = require('passport'),
     util = require('./util'),
     config = require('./config'),
+    bodyParser = require('body-parser'),
     app = express(),
     server;
 
@@ -13,7 +14,10 @@ app.set('view engine', 'jade');
 
 app.use(express.static(__dirname + '/public'));
 app.use(connect.logger('dev'));
-app.use(require('body-parser')());
+app.use(bodyParser.json());
+app.use(bodyParser.urlencoded({
+  extended: true
+}));
 app.use(require('cookie-parser')());
 app.use(require('express-session')({
     name: config.cookieName,
@@ -22,6 +26,8 @@ app.use(require('express-session')({
         maxAge: config.cookieMaxAge,
         secure: config.production
     },
+    resave: true,
+    saveUninitialized: true,
     proxy: true
 }));
 app.use(require('connect-flash')());
