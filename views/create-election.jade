@@ -11,6 +11,11 @@ block content
     .form-group
       label.control-label(for='fld2') Slug 
       input.form-control(placeholder='best-election', type='text', name='slug', id='fld2')
+    .checkbox
+      label
+        input(type='checkbox', name='isPublic', checked)
+        | Make public?
+      .help-block Public means the results will be accessible from the main page.
 
     .row
       h2 Date and Time
@@ -101,7 +106,6 @@ block content
           time = time.getHours() + ":" + (m < 10 ? "0" : "") + m;
           $("#startTime")[0].value = time;
       });
-
 
       $(".btn-end-date-7days").on('click', function() {
           var date = new Date;

@@ -24,7 +24,7 @@ var formidable = require('formidable'),
 
 function newError(message, name) {
     var err = new Error(message);
-    err.name = name;
+    err.type = name;
     return err;
 }
 
@@ -189,7 +189,11 @@ util.elections = exports.elections = {
 
         if (!req.params[0]) res.send(403, 'bad.');
 
-        res.sendfile(req.params[0], { root: dir });
+        res.sendfile(req.params[0], { root: dir }, function(err) {
+            if (err) {
+                res.status(404).end();
+            }
+        });
     },
 
     find: function(slug, callback) {
@@ -277,7 +281,7 @@ util.elections = exports.elections = {
 
                 }, function(err) {
                     mailer.close();
-                    if (err) throw err;
+                    if (err) return console.error(err.stack);
                     console.log("- All emails sent for " + slug);
                 });
             });
@@ -309,24 +313,25 @@ util.elections = exports.elections = {
                 }
 
                 var token = util.uuid.toMongo(id);
-                
-                // This is purposely checked after the elections begin and end to limit the
-                // potential to bruteforce a token successfully (even though it's impossible*)
-
-                if (!(token in election.tokens) && id != util.uuid.fromMongo(election.testToken)) {
-                    return callback(newError('Invalid token.', 'ELECTION'), null);
-                }
-                
-                ballots.findOne({election_id: election._id, token: token}, function(err, ballot) {
+                elections.findOne({slug: slug, tokens: token}, function(err, hasToken) {
                     if (err) return callback(err, null);
 
-                    if (ballot != null) {
-                        return callback(newError('A ballot has already been submitted.', 'ELECTION'), null);
+                    // This is purposely checked after the elections begin and end to limit the
+                    // potential to bruteforce a token successfully (even though it's impossible*)
+                    if (!hasToken && id != util.uuid.fromMongo(election.testToken)) {
+                        return callback(newError('Invalid token.', 'ELECTION'), null);
                     }
+                    
+                    ballots.findOne({election_id: election._id, token: token}, function(err, ballot) {
+                        if (err) return callback(err, null);
 
-                    return callback(null, { election: election, token: token }); 
+                        if (ballot != null) {
+                            return callback(newError('A ballot has already been submitted.', 'ELECTION'), null);
+                        }
+
+                        return callback(null, { election: election, token: token }); 
+                    });
                 });
-
             });
         });
     },
@@ -404,10 +409,10 @@ util.elections = exports.elections = {
                 } else {
                     // Check that a ballot doesn't already exist
                     
-                    ballots.findOne({election_id: ballot.election_id, token: ballot.token}, function(err, ballot) {
+                    ballots.findOne({election_id: ballot.election_id, token: ballot.token}, function(err, ballotAlreadyExists) {
                         if (err) return callback(err, null);
 
-                        if (ballot == null) {
+                        if (!ballotAlreadyExists) {
                             ballots.insert(ballot, {w:1}, function(err) {
                                 if (err) return callback(err);
                                 
@@ -428,7 +433,13 @@ util.elections = exports.elections = {
     generateResults: function(slug, callback) {
         // TODO: store a list of elections on the election itself.
         // TODO: store a list of candidates there too.
-        var proc = spawn('python', ['../countgap/count.py', slug]),
+        
+        if (config.countgapPath == null) {
+            return callback(newError("The result counting software has not yet been configured.", 
+                                     "ELECTION"));
+        }
+        
+        var proc = spawn('python', [config.countgapPath, slug]),
             data = '';
 
         proc.stdout.on('data', function(chunk) {
@@ -471,6 +482,7 @@ util.elections = exports.elections = {
                     slug: slug,
                     title: fields.title,
                     type: "election", // TODO: introduce type survey
+                    isPublic: !!fields.isPublic,
                     email: {
                         from: fields.emailFrom,
                         subject: fields.emailSubject,
@@ -537,7 +549,12 @@ exports.middleware = {
         var form = new formidable.IncomingForm();
 
         form.parse(req, function(err, fields, files) {
-            if (err) throw err;
+            if (err) {
+                if (err.message == "Request aborted") {
+                    return res.send(400);
+                }
+                return res.send(500);
+            }
 
             req.body = fields;
             req.files = files;

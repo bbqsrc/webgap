@@ -53,7 +53,7 @@ app.use(function(req, res, next) {
     res.status(404).render('404');
 });
 
-server = app.listen(3001, function() {
+server = app.listen(config.port, function() {
     console.log('Listening on port %d', server.address().port);
 });
 

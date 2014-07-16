@@ -39,7 +39,7 @@ router.route('/:slug/:id')
 .get(function(req, res) {
     util.elections.checkParams(req.params.slug, req.params.id, function(err, data) {
         if (err) {
-            if (err.name == "ELECTION") {
+            if (err.type == "ELECTION") {
                 res.render('403', { message: ""+err });
             } else {
                 console.error(err.stack);
@@ -55,10 +55,10 @@ router.route('/:slug/:id')
         util.elections.render(req.params.slug, res);
     });
 })
-.post(parseFormData, function(req, res) {
+.post(function(req, res) {
     util.elections.checkParams(req.params.slug, req.params.id, function(err, data) {
         if (err) {
-            if (err.name == "ELECTION") {
+            if (err.type == "ELECTION") {
                 res.render('403', { message: ""+err });
             } else {
                 console.error(err.stack);
@@ -67,16 +67,17 @@ router.route('/:slug/:id')
             }
             return;
         };
-       
+      
+        console.log(req.body);
         var o = {
             election_id: data.election._id,
             token: data.token,
-            ballot: parsePostData(res.body)
+            ballot: parsePostData(req.body)
         };
         
         util.elections.insertBallot(o, function(err) {
             if (err) {
-                if (err.name == "ELECTION") {
+                if (err.type == "ELECTION") {
                     res.render('403', { message: ""+err });
                 } else {
                     console.error(err.stack);

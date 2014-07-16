@@ -12,6 +12,7 @@ try {
 var config = _.defaults(baseConfig, {
     production: false,
     host: "localhost",
+    port: 3001,
 
     mongoHost: "localhost",
     mongoPort: 27017,
@@ -27,6 +28,7 @@ var config = _.defaults(baseConfig, {
     cookieMaxAge: 900000,
 
     dataDir: __dirname + '/data',
+    countgapPath: null,
 
     get mongoURL() {
         return "mongodb://" + this.mongoHost + ":" + this.mongoPort + "/" + this.mongoDB;
