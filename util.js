@@ -656,9 +656,9 @@ util.elections = exports.elections = {
 
                     return callback(err, record);
                 });
+            } else {
+                return callback(newError("Election has not ended yet!", "ELECTION")); 
             }
-
-            return callback(newError("Election has not ended yet!", "ELECTION")); 
         });
     },
 
