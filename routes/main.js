@@ -29,6 +29,40 @@ function parsePostData(data) {
     return out;
 }
 
+// TODO: only allow if election has isPublic flag
+router.get("/results/:slug", function(req, res) {
+    /*
+    util.elections.getBallots(req.params.slug, function(err, ballots) {
+        if (ballots == null) {
+            res.send(500, "It shouldn't be possible to get into this state.");
+        }
+       
+        ballots.toArray(function(err, arr) {
+            res.render('results-table', { title: "Results Table",
+                       headers: arr[0].ballot, ballots: arr });
+        });
+    });
+    */
+    util.elections.getResults(req.params.slug, function(err, record) {
+        if (err) {
+            if (err.type == "RESULT" || err.type == "ELECTION") {
+                return res.render('results-raw', { 
+                    title: "Results",
+                    alert: err.message });
+            }
+        }
+
+        if (record == null) {
+            return res.render('results-raw', { title: "Results", 
+                                               alert: "Results are still generating. " + 
+                                                      "Please refresh after about 10 seconds." });
+        }
+
+        return res.render('results-raw', { title: "Results", data: record.data });
+    });
+
+});
+
 router.get('/:slug/static/*', util.elections.renderStatic);
 
 router.get('/', function(req, res) {

@@ -15,17 +15,32 @@ router.get('/', isAdmin, function(req, res) {
     res.render('index', { title: "Index" }); 
 });
 
-/*
 // Email groups: eg Taswegia has all taswegians
-router.get('/participant-groups', isAdmin, function(req, res) {
-    
+router.get('/participants', isAdmin, function(req, res) {
+    util.participantGroups.all(function(err, data) {
+        //TODO
+        if (err) throw err;
+
+        res.render('participants', { participants: data });
+    });
 });
 
-router.get('/participant-groups/create', isAdmin, function(req, res) {
+router.route('/participants/create')
+.get(isAdmin, function(req, res) {
+    res.render('add-participants');
+})
+.post(isAdmin, function(req, res) {
+    var emails = req.body.emails.trim().split('\n').map(function(em) { return em.trim(); });
 
+    util.participantGroups.create(req.body.name, emails, function(err) {
+        res.render('add-participants', { 
+            alert: "Successfully added group '" + req.body.name + "'."
+        });
+    });
 });
 
-router.route('/participant-group/:slug')
+/*
+router.route('/participant/:slug')
 .get(isAdmin, function(req, res) {
 
 })
@@ -79,7 +94,11 @@ router.get('/elections', isAdmin, function(req, res) {
 
 router.route("/elections/create")
 .get(isAdmin, function(req, res) {
-    res.render('create-election', { title: "Create Election" });
+    util.participantGroups.all(function(err, participants) {
+        //TODO
+        if (err) throw err;
+        res.render('create-election', { title: "Create Election", participants: participants });
+    });
 })
 .post(isAdmin, parseFormData, function(req, res) {
     util.elections.createElection(req, res, req.body, req.files);
@@ -113,24 +132,6 @@ router.get("/ballots/:slug", isAdmin, function(req, res) {
                 res.render('ballots', { util: util, ballots: data, count: data.length });
             });
         });
-    });
-});
-
-router.get("/results/:slug", isAdmin, function(req, res) {
-    /*
-    util.elections.getBallots(req.params.slug, function(err, ballots) {
-        if (ballots == null) {
-            res.send(500, "It shouldn't be possible to get into this state.");
-        }
-       
-        ballots.toArray(function(err, arr) {
-            res.render('results-table', { title: "Results Table",
-                       headers: arr[0].ballot, ballots: arr });
-        });
-    });
-    */
-    util.elections.generateResults(req.params.slug, function(err, data) {
-        res.render('results-raw', { data: data });
     });
 });
 

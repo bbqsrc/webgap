@@ -1,0 +1,22 @@
+extend layout
+block content
+  .page-header
+    h1 Participants 
+
+  if alert
+    .alert.alert-info= alert
+
+  form.col-sm-8.col-sm-offset-2(method="POST")
+    h2 Participants
+    .form-group
+      label.control-label(for='name') Group Name
+      input.form-control(placeholder='Taswegians', type='text', name='name', id='name')
+    .form-group
+      label.control-label(for='emails') Recipients
+      textarea.form-control(placeholder='foo@bar.lol', name='emails', id='emails', rows='8').
+      .help-block One email address per line.
+
+    
+    button.btn.btn-success(type='submit') Create Group
+
+    hr

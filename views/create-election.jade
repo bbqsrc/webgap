@@ -69,10 +69,10 @@ block content
         Election Team
       .help-block Body must include the {url} token or people won't be able to access the voting page!
     .form-group
-      label.control-label(for='fld-email4') Recipients
-      textarea.form-control(placeholder='foo@bar.lol', name='emailRecipients', id='fld-email4', rows='8').
-      .help-block One email address per line.
-
+      label.control-label(for='participant-groups') Participant Groups
+      select.form-control(multiple, placeholder='foo@bar.lol', name='participants', id='participant-groups', rows='8')
+        for p in participants
+          option(value=p.name)= p.name
     h2 Required files
     .form-group
       label.control-label(for='fld-files') Form files (.tar.gz)

@@ -33,23 +33,27 @@ exports.fromMongo = function(obj) {
     // eg handling UUIDs automatically, handling dates, etc
 };
 
-exports.Counter = function() {
+util.Counter = exports.Counter = function() {
     this._data = {};
 };
 
 exports.Counter.prototype = {
-    inc: function() {
-        var x, prop,
-            args = Array.prototype.slice.call(arguments);
-        
-        if (arguments.length == 0) {
-            throw new TypeError("needs at least one key");
-        }
+    inc: function(key, x) {
+        x = x || 1;
+        this._data[key] == null ? 
+            this._data[key] = x : 
+            this._data[key] += x;
 
-        x = this._data;
+        return this._data[key];
+    },
 
-        // TODO FINISH THIS
-        // allow inc('foo', 'bar', 'bat') -> _data.foo.bar.bat += 1
+    dec: function(key, x) {
+        return this.inc(key, -x|0);
+    },
+
+    get: function(key) {
+        var v = this._data[key];
+        return v == null ? 0 : v;
     }
 };
 
@@ -170,6 +174,187 @@ util.mongo = {
         });
     }
 };
+
+util.participantGroups = exports.participantGroups = {
+    create: function(name, emails, callback) {
+        util.mongo.collection('participants', function(err, participants) {
+            if (err) { return callback(err); }
+            
+            participants.findOne({name: name}, function(err, alreadyHas) {
+                if (err) { return callback(err); }
+
+                if (alreadyHas) { callback(new Error("Duplicate entry.")) }
+                
+                participants.insert({
+                    name: name,
+                    emails: emails
+                }, {w:1}, function(err) {
+                    return callback(err);
+                });
+            });
+        });
+    },
+
+    all: function(callback) {
+        util.mongo.collection('participants', function(err, participants) {
+            if (err) { return callback(err); }
+            
+            participants.find({}, function(err, all) {
+                if (err) { return callback(err); }
+                         
+                all.toArray(function(err, data) {
+                    if (err) { return callback(err); }
+                    
+                    callback(null, data);
+                });
+            })
+        });
+    },
+
+    find: function(query, callback) {
+        util.mongo.collection('participants', function(err, participants) {
+            if (err) return callback(err);
+
+            return participants.find(query, callback);
+        });
+    }
+};
+
+util.results = exports.results = {
+    get: function(slug, callback) {
+        util.mongo.collection('results', function(err, results) {
+            if (err) return callback(err);
+
+            results.findOne({slug: slug}, function(err, record) {
+                if (err) return callback(err);
+
+                return callback(null, record);
+            });
+        });
+    },
+
+    countMotions: function(slug, callback) {
+        util.elections.getBallots(slug, function(err, ballots) {
+            var data = "= Motions =\n\n",
+                items,
+                counter = new util.Counter;
+
+            ballots.each(function(err, ballot) {
+                if (err) return callback(err);
+
+                if (ballot == null) { // Done!
+                    items.forEach(function(key) {
+                        var ayes = counter.get(key + "aye"),
+                            nays = counter.get(key + "nay"),
+                            abstains = counter.get(key + "abstain"),
+                            total = ayes + nays,
+                            absoluteTotal = ayes + nays + abstains,
+                            majorityReq = ((total / 2) | 0) + 1,
+                            twoThirdsReq = ((total / 3 * 2) | 0) + 1,
+                            ayePercent = (ayes / total * 100).toFixed(2);
+
+                        data += "== " + key + " ==\n" +
+                                "Ayes: " + ayes + " (" + ayePercent + "%) " +
+                                "Nays: " + nays + " " +
+                                "Abstains: " + abstains + "\n" +
+                                "Ayes + Nays: " + total + "\n" +
+                                "Simple Majority: " + (ayes >= majorityReq) + "\n" +
+                                "Two-thirds Majority: " + (ayes >= twoThirdsReq) + "\n" +
+                                "\n";
+                    });
+
+                    return callback(err, data);
+                }
+
+                if (!ballot.ballot.motions) {
+                    // TODO this is an error case, log it
+                    return; // continue
+                }
+                
+                if (items == null) {
+                    items = Object.keys(ballot.ballot.motions);
+                }
+
+                items.forEach(function(key) {
+                    var v = ballot.ballot.motions[key];
+
+                    if (v == null) {
+                        return; // TODO: this is an error case
+                    }
+
+                    v = v.toLowerCase();
+
+                    // Compatibility with old data
+                    if (v == "yes") { v = "aye" }
+                    if (v == "no") { v = "nay" }
+
+                    counter.inc(key + v.toLowerCase());
+                });
+            });
+        });
+    },
+
+    generate: function(slug, callback) {
+        // TODO: store a list of subelections on the election itself.
+        // TODO: store a list of candidates there too.
+        if (config.countgapPath == null) {
+            return callback(newError("The result counting software has not yet been configured.", 
+                                     "ELECTION"));
+        }
+
+        // TODO: this is a quick hack so we can finish Piratecon2014.
+        // - Ideally, we can handle different counting methods, outputs etc
+        // - We should look at a standard schema for defining elections going forward.
+        util.mongo.collection('results', function(err, results) {
+            if (err) return callback(err);
+       
+            util.elections.getElection(slug, function(err, election) {
+                if (err) return callback(err);
+
+                if (election == null) {
+                    return callback(newError("No election found.", "ELECTION"));
+                }
+
+                util.results.countMotions(slug, function(err, data) {
+    
+                    results.update({slug: slug}, {
+                        slug: slug,
+                        isComplete: false
+                    }, {w: 1, upsert: true}, function(err) {
+                        var proc = spawn('python', [config.countgapPath, slug]);
+
+                        data += "= Elections =\n";
+
+                        proc.stdout.on('data', function(chunk) {
+                            data += chunk;
+                        });
+
+                        proc.on('close', function(code) {
+                            callback(code == 0 ? null : 
+                                     newError("Result counting failed. Code: " + code),
+                                              data);
+                        });
+                    });
+                });
+                // Count motions!
+
+            });
+        });
+    },
+
+    add: function(slug, data, callback) {
+        // Do an upsert.
+        util.mongo.collection('results', function(err, results) {
+            if (err) return callback(err);
+
+            results.update({slug: slug}, {
+                $set: { data: data, isComplete: true }
+            }, {w: 1, upsert: true}, function(err) {
+                return callback(err);
+            });
+        });
+    }
+}
 
 util.elections = exports.elections = {
     render: function(slug, res) {
@@ -351,7 +536,7 @@ util.elections = exports.elections = {
             if (base.length) {
                 base.attr('href', href);
             } else {
-                $("head").prepend("<base href='" + href + "'>");
+                $("head").prepend("<base href='" + href + "' target='_blank'>");
             }
 
             fs.writeFile(path, $.html(), function(err) {
@@ -430,26 +615,48 @@ util.elections = exports.elections = {
         });
     },
 
-    // TODO: countgap subprocess ohohohoh
-    // Will need to manage state to ensure no conflicting iterations 
-    generateResults: function(slug, callback) {
-        // TODO: store a list of elections on the election itself.
-        // TODO: store a list of candidates there too.
-        
-        if (config.countgapPath == null) {
-            return callback(newError("The result counting software has not yet been configured.", 
-                                     "ELECTION"));
-        }
-        
-        var proc = spawn('python', [config.countgapPath, slug]),
-            data = '';
+    getResults: function(slug, callback) {
+        util.elections.getElection(slug, function(err, election) {
+            if (err) return callback(err);
 
-        proc.stdout.on('data', function(chunk) {
-            data += chunk;
-        });
+            if (election == null) {
+                return callback(newError("No election found.", "ELECTION"));
+            }
 
-        proc.on('close', function(code) {
-            callback(code, data);
+            if (+election.endTime <= +Date.now()) {
+                util.results.get(slug, function(err, record) {
+                    if (err) return callback(err);
+
+                    // No record? Trigger generation.
+                    if (record == null) {
+                        util.results.generate(slug, function(err, data) {
+                            if (err || !data) {
+                                console.error("Results for '" + slug + "' generation failed.");
+                                console.error(err);
+                                return;
+                            }
+
+                            util.results.add(slug, data, function(err) {
+                                if (err || !data) {
+                                    console.error("Results for '" + slug + "' generation failed.");
+                                    console.error(err);
+                                    return;
+                                }
+
+                                console.log("Results for '" + slug + "' added successfully.");
+                                return;
+                            });
+                        });
+                    }
+
+                    if (record == null || record.isComplete != true) {
+                        // Means they are still generating.
+                        return callback(newError("Results still being generated.", "RESULTS"));
+                    }
+
+                    return callback(err, record);
+                });
+            }
         });
     },
 
@@ -478,7 +685,12 @@ util.elections = exports.elections = {
                                        timezone, dateFormat).toDate(),
                     endTime = moment(fields.endDate + fields.endTime + 
                                      timezone, dateFormat).toDate(),
+                    participants = fields.participants,
                     o, i, ii, emails;
+                    
+                if (typeof participants == "string") {
+                    participants = [participants];
+                }
 
                 o = {
                     slug: slug,
@@ -499,22 +711,32 @@ util.elections = exports.elections = {
 
                 //XXX: we should probably validate ballot content to ensure it is accurate
                 // at some point. 
-                emails = fields.emailRecipients.trim().replace(/(^ +| +$|\r)/gm, '').split('\n');
-                for (i = 0, ii = emails.length; i < ii; ++i) {
-                    o.participants.push({ email: emails[i].trim(), sent: false }); 
-                }
 
-                util.elections.storeElectionFiles(slug, files.tgzFile, function(err) {
-                    if (err) throw err;                                
-                    
-                    elections.insert(o, {w:1}, function(err) {
-                        if (err) throw err;
+                util.mongo.collection('participants', function(err, p) {
+                    if (err) return callback(err);
 
-                        scheduler.add(o.startTime, function() {
-                            util.elections.sendEmails(slug);
-                        });
+                    p.find({name: { $in: participants }}).each(function(err, data) {
+                        if (err) return res.end(err);
+                        
+                        if (data == null) { // Done!
+                            util.elections.storeElectionFiles(slug, files.tgzFile, function(err) {
+                                if (err) throw err;                                
+                                
+                                elections.insert(o, {w:1}, function(err) {
+                                    if (err) throw err;
 
-                        res.redirect('/admin/election/' + o.slug);
+                                    scheduler.add(o.startTime, function() {
+                                        util.elections.sendEmails(slug);
+                                    });
+
+                                    res.redirect('/admin/election/' + o.slug);
+                                });
+                            });
+                        } else {
+                            data.emails.forEach(function(em) {
+                                o.participants.push({ email: em, sent: false });
+                            });
+                        }
                     });
                 });
             });
@@ -547,21 +769,45 @@ exports.middleware = {
     },
 
     parseFormData: function(req, res, next) {
-        var form = new formidable.IncomingForm();
+        var form = new formidable.IncomingForm(),
+            fields = Object.create(null),
+            files = Object.create(null);
 
-        form.parse(req, function(err, fields, files) {
-            if (err) {
-                if (err.message == "Request aborted") {
-                    return res.send(400);
-                }
-                return res.send(500);
+        // Bug in the library means we had to manually do this.
+        // It doesn't support select:multiple !
+        form.on('field', function(name, value) {
+            if (typeof fields[name] == "string") {
+                fields[name] = [fields[name]];
             }
 
+            if (Array.isArray(fields[name])) {
+                fields[name].push(value);
+            } else {
+                fields[name] = value;
+            }
+        }).on('file', function(name, file) {
+            if (this.multiples) {
+                if (files[name]) {
+                    if (!Array.isArray(files[name])) {
+                        files[name] = [files[name]];
+                    }
+                    files[name].push(file);
+                } else {
+                    files[name] = file;
+                }
+            } else {
+                files[name] = file;
+            }
+        }).on('error', function(err) {
+            return res.send(500);
+        }).on('end', function() {
             req.body = fields;
             req.files = files;
 
             return next();
         });
+        
+        form.parse(req);
     }
 };
 

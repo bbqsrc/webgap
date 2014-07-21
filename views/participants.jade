@@ -1,0 +1,20 @@
+extend layout
+block content
+  .page-header
+    h1 Add Participants 
+
+  .well
+    a.btn.btn-primary(href='/admin/participants/create').
+      Add Participants
+  table.table.participants
+    thead
+      tr
+        th Group
+        th Emails
+    tbody
+      each p in participants
+        tr
+          td= p.name
+          td= p.emails.length
+
+

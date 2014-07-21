@@ -1,7 +1,11 @@
-extend layout
+extend layout-noheader
 block content
   .page-header
-    h1= Results
+    h1= title
 
-  pre= data
+  if alert
+    .alert.alert-info= alert
+
+  if data
+    pre= data
 
