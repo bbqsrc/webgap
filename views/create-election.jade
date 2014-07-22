@@ -102,8 +102,9 @@ block content
 
       $(".btn-start-time-now").on('click', function() {
           var time = new Date(),
-              m = time.getMinutes();
-          time = time.getHours() + ":" + (m < 10 ? "0" : "") + m;
+              m = time.getMinutes(),
+              h = time.getHours();
+          time = (h < 10 ? "0" : "") + h + ":" + (m < 10 ? "0" : "") + m;
           $("#startTime")[0].value = time;
       });
 

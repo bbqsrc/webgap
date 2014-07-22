@@ -761,6 +761,7 @@ exports.middleware = {
         return function(req, res, next) {
             if (req.user) {
                 if (req.user.admin) {
+                    console.log('isAdmin:', req.user, req.originalUrl);
                     return next();
                 }
                 return res.send(403);
