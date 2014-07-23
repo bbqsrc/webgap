@@ -126,8 +126,23 @@ util.uuid = exports.uuid = {
     }
 };
 
+var _database = null;
+
+exports.getDB = util.getDB = function(callback) {
+    if (_database == null) {
+        MongoClient.connect(config.mongoURL, function(err, db) {
+            if (err) { return callback(err, null); }
+            
+            _database = db;
+            return callback(null, db);
+        });
+    } else {
+        return callback(null, _database);
+    }
+}
+
 exports.startScheduler = function() {
-    MongoClient.connect(config.mongoURL, function(err, db) {
+    util.getDB(function(err, db) {
         if (err) throw err;
 
         var elections = db.collection('elections');
@@ -166,7 +181,7 @@ util.path = exports.path = {
 
 util.mongo = {
     collection: function(collection, callback) {
-        MongoClient.connect(config.mongoURL, function(err, db) {
+        util.getDB(function(err, db) {
             if (err) return callback(err, null);
 
             var coll = db.collection(collection);
@@ -392,9 +407,9 @@ util.elections = exports.elections = {
     },
 
     getBallots: function(slug, callback) {
-        MongoClient.connect(config.mongoURL, function(err, db) {
+        util.getDB(function(err, db) {
             if (err) return callback(err, null);
-
+            
             var elections = db.collection('elections'),
                 ballots = db.collection('ballots');
 
@@ -474,7 +489,7 @@ util.elections = exports.elections = {
     },
 
     checkParams: function(slug, id, callback) {
-        MongoClient.connect(config.mongoURL, function(err, db) {
+        util.getDB(function(err, db) {
             if (err) return callback(err, null);
 
             var elections = db.collection('elections');
@@ -567,9 +582,9 @@ util.elections = exports.elections = {
     },
 
     getElection: function(slug, callback) {
-        MongoClient.connect(config.mongoURL, function(err, db) {
+        util.getDB(function(err, db) {
             if (err) return callback(err, null);
-            
+
             var elections = db.collection('elections');
             elections.findOne({slug: slug}, function(err, election) {
                 if (err) callback(err, null);
@@ -580,7 +595,7 @@ util.elections = exports.elections = {
     },
 
     insertBallot: function(ballot, callback) {
-        MongoClient.connect(config.mongoURL, function(err, db) {
+        util.getDB(function(err, db) {
             if (err) return callback(err);
 
             var elections = db.collection('elections');
@@ -666,9 +681,9 @@ util.elections = exports.elections = {
     removeElection: function() {},
 
     createElection: function(req, res, fields, files) {
-        MongoClient.connect(config.mongoURL, function(err, db) {
+        util.getDB(function(err, db) {
             if (err) return callback(err, null);
-            
+
             var slug = fields.slug;
             var elections = db.collection('elections');
             var ballots = db.collection('ballots');
@@ -857,7 +872,9 @@ var UserUtil = exports.UserUtil = {
 };
 
 exports.localStrategy = new LocalStrategy(function(username, password, done) {
-    MongoClient.connect(config.mongoURL, function(err, db) {
+    util.getDB(function(err, db) {
+        if (err) throw err;
+
         var users = db.collection('users');
         users.findOne({username: username}, function(err, user) {
             if (err) return done(err);

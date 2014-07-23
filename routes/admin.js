@@ -62,7 +62,7 @@ router.route('/views/create', isAdmin, function(req, res) {
 */
 
 router.get('/elections', isAdmin, function(req, res) {
-    MongoClient.connect(config.mongoURL, function(err, db) {
+    util.getDB(function(err, db) {
         if (err) throw err;
         
         var parsed = [];
@@ -118,7 +118,7 @@ router.get("/election/:slug", isAdmin, function(req, res) {
 router.get("/ballots/:slug", isAdmin, function(req, res) {
     var slug = req.params.slug;
     
-    MongoClient.connect(config.mongoURL, function(err, db) {
+    util.getDB(function(err, db) {
         if (err) throw err;
 
         var elections = db.collection('elections'),
@@ -195,7 +195,7 @@ router.route('/create-account')
             submit: "Create Account"
         });
     } else { 
-        MongoClient.connect(config.mongoURL, function(err, db) {
+        util.getDB(function(err, db) {
             if (err) throw err;
 
             var users = db.collection('users');
@@ -223,7 +223,7 @@ router.route('/create-account')
             res.send(400, "You broke it.");
         }
         
-        MongoClient.connect(config.mongoURL, function(err, db) {
+        util.getDB(function(err, db) {
             if (err) throw err;
 
             var users = db.collection('users');
@@ -254,7 +254,7 @@ router.route('/create-account')
             });
         });
     } else {
-        MongoClient.connect(config.mongoURL, function(err, db) {
+        util.getDB(function(err, db) {
             if (err) throw err;
 
             var users = db.collection('users');
