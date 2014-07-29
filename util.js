@@ -258,6 +258,10 @@ util.results = exports.results = {
                 if (err) return callback(err);
 
                 if (ballot == null) { // Done!
+                    if (items == null) {
+                        return callback(err, "");
+                    }
+                    
                     items.forEach(function(key) {
                         var ayes = counter.get(key + "aye"),
                             nays = counter.get(key + "nay"),
